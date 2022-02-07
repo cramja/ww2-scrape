@@ -1,12 +1,17 @@
-from typing import List
-
-import bs4
-import requests
-import tempfile
-from os.path import exists
 import hashlib
 import json
 import logging
+import re
+import tempfile
+from os.path import exists
+from typing import List
+
+import bs4
+import fire
+import firebase_admin
+import requests
+from firebase_admin import credentials
+from firebase_admin import firestore
 
 logging.basicConfig()
 LOG = logging.getLogger(__name__)
@@ -22,7 +27,7 @@ def get_doc(url: str) -> str:
         with open(cache_key, 'r') as f:
             body = f.read()
             if body.startswith(url + "\n"):
-                return body[len(url)+1:]
+                return body[len(url) + 1:]
 
     res = requests.get(url)
     res.raise_for_status()
@@ -35,7 +40,7 @@ def scrape_wiki_for_dates(html) -> dict:
     # TODO: handle li variant
 
     months = ["January", "February", "March", "April", "May", "June", "July",
-                       "August", "September", "October", "November", "December"]
+              "August", "September", "October", "November", "December"]
     months = {month: 1 + i for i, month in enumerate(months)}
 
     doc = bs4.BeautifulSoup(html, 'html.parser')
@@ -57,12 +62,26 @@ def scrape_wiki_for_dates(html) -> dict:
             event_html = tag.find("dd")
             if event_html != -1:
                 try:
-                    # TODO: handle date ranges
-                    day, text = tag.text.split(":", 1)
+                    start_day, text = tag.text.split(":", 1)
+                    end_day = None
+                    if "-" in start_day:
+                        start_day, end_day = start_day.split("-")
+                    start_day = f"{year}-{months[month]:02d}-{int(start_day):02d}"
+                    end_day = f"{year}-{months[month]:02d}-{int(end_day):02d}" if end_day else start_day
+
+                    links = []
+                    for link in tag.find_all("a"):
+                        ref = link.get("href")
+                        if ref.startswith("/wiki/"):
+                            links.append(f"https://en.wikipedia.org/{ref}")
+
+                    text = re.sub(r"\[\d+\]", "", text.strip())
                     events.append({
-                        "timestamp": f"{year}-{months[month]:02d}-{int(day):02d}",
-                        "text": text.strip(),
-                        "html": str(tag)
+                        "id": hashlib.md5(text.encode()).hexdigest()[:12],
+                        "startDate": start_day,
+                        "endDate": end_day,
+                        "text": text,
+                        "links": links
                     })
                 except:
                     # TODO: handle inline elements
@@ -70,9 +89,45 @@ def scrape_wiki_for_dates(html) -> dict:
 
     return events
 
+
+class Cli:
+    def scrape(self):
+        urls = [f"https://en.wikipedia.org/wiki/Timeline_of_World_War_II_({year})" for year in range(1939, 1945)]
+        events = []
+        for url in urls:
+            events.extend(scrape_wiki_for_dates(get_doc(url)))
+        return json.dumps(events, indent=2)
+
+    def publish(self, cert, events_file):
+        """
+        https://firebase.google.com/docs/firestore/quickstart?authuser=0#python
+        """
+        app = firebase_admin.initialize_app(credentials.Certificate(cert))
+        db = firestore.client(app)
+
+        with open(events_file, 'r') as f:
+            events = json.load(f)
+
+        updated, checked = 0, 0
+        for event in events:
+            doc_ref = db.collection(u'events').document(event["id"])
+
+            if doc_ref.get().to_dict() != event:
+                doc_ref.set(event)
+                updated += 1
+            else:
+                checked += 1
+            if (updated + checked) % 10 == 0:
+                print(f"updated {updated} and checked {checked} of {len(events)}")
+
+    def query(self, cert, start_date, end_date = None):
+        if end_date is None:
+            end_date = start_date
+        app = firebase_admin.initialize_app(credentials.Certificate(cert))
+        db = firestore.client(app)
+        events = db.collection("events").where(u'startDate', u'>=', start_date).where("startDate", "<=", end_date).stream()
+        return json.dumps(list(map(lambda e: e.to_dict(), events)), indent=2)
+
+
 if __name__ == '__main__':
-    urls = [f"https://en.wikipedia.org/wiki/Timeline_of_World_War_II_({year})" for year in range(1939, 1945)]
-    events = []
-    for url in urls:
-        events.extend(scrape_wiki_for_dates(get_doc(url)))
-    print(json.dumps(events, indent=2))
+    fire.Fire(Cli)
