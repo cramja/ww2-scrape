@@ -47,7 +47,7 @@ function DatePicker({ value, onChange }) {
   );
 }
 
-export default function SearchApp({}) {
+export default function SearchApp({onSelect}) {
   const [state, setState] = useState({
     startDate: "1941-08-01",
     endDate: "1942-01-01",
@@ -61,7 +61,7 @@ export default function SearchApp({}) {
       where("startDate", ">=", state.startDate),
       where("startDate", "<=", state.endDate),
       orderBy("startDate", "asc"),
-      //orderBy("id", "desc"),
+      orderBy("id", "desc"),
       limit(100)
     );
     getDocs(q).then((docs) => {
@@ -88,7 +88,7 @@ export default function SearchApp({}) {
         {state.events == null
           ? ""
           : state.events.map((e) => (
-              <div>
+              <div onClick={() => onSelect(e.id)}>
                 {e.startDate} - {trimText(e.text)}
               </div>
             ))}
