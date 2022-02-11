@@ -7,7 +7,6 @@ from os.path import exists
 from typing import List
 
 import bs4
-import fire
 import firebase_admin
 import requests
 from firebase_admin import credentials
@@ -17,11 +16,11 @@ logging.basicConfig()
 LOG = logging.getLogger(__name__)
 
 
-def get_docs(urls: List[str]):
-    return {url: get_doc(url) for url in urls}
+def _get_docs(urls: List[str]):
+    return {url: _get_doc(url) for url in urls}
 
 
-def get_doc(url: str) -> str:
+def _get_doc(url: str) -> str:
     cache_key = f'{tempfile.gettempdir()}/{hashlib.md5(url.encode()).hexdigest()}.wiki'
     if exists(cache_key):
         with open(cache_key, 'r') as f:
@@ -36,7 +35,7 @@ def get_doc(url: str) -> str:
     return res.text
 
 
-def scrape_wiki_for_dates(html) -> dict:
+def _scrape_wiki_for_dates(html) -> dict:
     # TODO: handle li variant
 
     months = ["January", "February", "March", "April", "May", "June", "July",
@@ -90,44 +89,32 @@ def scrape_wiki_for_dates(html) -> dict:
     return events
 
 
-class Cli:
-    def scrape(self):
-        urls = [f"https://en.wikipedia.org/wiki/Timeline_of_World_War_II_({year})" for year in range(1939, 1945)]
-        events = []
-        for url in urls:
-            events.extend(scrape_wiki_for_dates(get_doc(url)))
-        return json.dumps(events, indent=2)
-
-    def publish(self, cert, events_file):
-        """
-        https://firebase.google.com/docs/firestore/quickstart?authuser=0#python
-        """
-        app = firebase_admin.initialize_app(credentials.Certificate(cert))
-        db = firestore.client(app)
-
-        with open(events_file, 'r') as f:
-            events = json.load(f)
-
-        updated, checked = 0, 0
-        for event in events:
-            doc_ref = db.collection(u'events').document(event["id"])
-
-            if doc_ref.get().to_dict() != event:
-                doc_ref.set(event)
-                updated += 1
-            else:
-                checked += 1
-            if (updated + checked) % 10 == 0:
-                print(f"updated {updated} and checked {checked} of {len(events)}")
-
-    def query(self, cert, start_date, end_date = None):
-        if end_date is None:
-            end_date = start_date
-        app = firebase_admin.initialize_app(credentials.Certificate(cert))
-        db = firestore.client(app)
-        events = db.collection("events").where(u'startDate', u'>=', start_date).where("startDate", "<=", end_date).stream()
-        return json.dumps(list(map(lambda e: e.to_dict(), events)), indent=2)
+def scrape_wiki():
+    urls = [f"https://en.wikipedia.org/wiki/Timeline_of_World_War_II_({year})" for year in range(1939, 1945)]
+    events = []
+    for url in urls:
+        events.extend(_scrape_wiki_for_dates(_get_doc(url)))
+    return json.dumps(events, indent=2)
 
 
-if __name__ == '__main__':
-    fire.Fire(Cli)
+def sync_firestore(cert, events_file):
+    """
+    https://firebase.google.com/docs/firestore/quickstart?authuser=0#python
+    """
+    app = firebase_admin.initialize_app(credentials.Certificate(cert))
+    db = firestore.client(app)
+
+    with open(events_file, 'r') as f:
+        events = json.load(f)
+
+    updated, checked = 0, 0
+    for event in events:
+        doc_ref = db.collection(u'events').document(event["id"])
+
+        if doc_ref.get().to_dict() != event:
+            doc_ref.set(event)
+            updated += 1
+        else:
+            checked += 1
+        if (updated + checked) % 10 == 0:
+            print(f"updated {updated} and checked {checked} of {len(events)}")
