@@ -1,0 +1,30 @@
+.searchApp_base {
+  flex-basis: 40%;
+  overflow-y: scroll;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.searchApp_base::-webkit-scrollbar {
+  display: none;
+}
+
+.searchApp_eventGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.searchApp_event {
+  cursor: pointer;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: row;
+}
+
+.searchApp_eventMeta {
+  padding-right: 10px;
+}
+
+.searchApp_eventMeta > pre {
+  margin: 0px;
+}

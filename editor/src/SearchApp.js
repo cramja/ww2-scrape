@@ -10,6 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 
+import "./searchApp.css";
 
 const isDate = (string) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(string);
 
@@ -47,12 +48,28 @@ function DatePicker({ value, onChange }) {
   );
 }
 
-export default function SearchApp({onSelect}) {
+export default function SearchApp({event, onSelect}) {
   const [state, setState] = useState({
-    startDate: "1941-08-01",
-    endDate: "1942-01-01",
-    events: null,
+    startDate: "1939-08-01",
+    endDate: "1939-10-01",
+    events: [],
   });
+
+  useEffect(() => {
+    if (event != null) {
+      setState((state) => {
+        const nextEvents = [];
+        for (let i = 0; i < state.events.length; i++) {
+          if (state.events[i].id == event.id) {
+            nextEvents.push(event);
+          } else {
+            nextEvents.push(state.events[i]);
+          }
+        }
+        return ({...state, events: nextEvents});
+      });
+    }
+  }, [event]);
 
   useEffect(() => {
     // TODO: pagination
@@ -71,9 +88,21 @@ export default function SearchApp({onSelect}) {
     });
   }, [state.endDate, state.startDate]);
 
+  function eventsByDate() {
+    const byDate = state.events.reduce((acc, e) => {
+            if (!acc[e.startDate]) {
+              acc[e.startDate] = [e]
+            } else {
+              acc[e.startDate].push(e)
+            }
+            return acc;
+          }, {});
+    return Object.keys(byDate).sort().map(date => ({date, events: byDate[date]}));
+  }
+
   return (
-    <div>
-      <div>
+    <div className="searchApp_base">
+      <div className="searchApp_controls">
         <DatePicker
           value={state.startDate}
           onChange={(startDate) => setState((s) => ({ ...s, startDate }))}
@@ -82,16 +111,25 @@ export default function SearchApp({onSelect}) {
           value={state.endDate}
           onChange={(endDate) => setState((s) => ({ ...s, endDate }))}
         />
-        {state.events == null ? 0 : state.events.length}
+        {state.events.length}
       </div>
-      <div>
-        {state.events == null
-          ? ""
-          : state.events.map((e) => (
-              <div onClick={() => onSelect(e.id)}>
-                {e.startDate} - {trimText(e.text)}
-              </div>
-            ))}
+      <div className="searchApp_eventList">
+        {eventsByDate().map((edate) => {
+          return (
+            <div className="searchApp_eventGroup">
+              <h3>{edate.date}</h3>
+              {edate.events.map((e) => (
+                <div className="searchApp_event" onClick={() => onSelect(e.id)}>
+                  <div className="searchApp_eventMeta">
+                    <pre>{e.id}</pre>
+                    <pre>{e.updateTime ? "✅" : ""}</pre>
+                  </div>
+                  <a title={e.text}>{e.text}</a>
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

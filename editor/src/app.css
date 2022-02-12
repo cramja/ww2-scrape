@@ -1,3 +1,6 @@
-h1, p {
-  font-family: Lato;
+.app_editor {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  max-height: 100%;
 }

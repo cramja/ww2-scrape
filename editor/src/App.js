@@ -12,6 +12,8 @@ function reduce(state, action) {
       return { ...state, user: action.user };
     case "SELECT_EVENT":
       return { ...state, eventId: action.id };
+    case "UPDATE_EVENT":
+      return {...state, event: action.event};
     default:
       return state;
   }
@@ -21,9 +23,9 @@ function reduce(state, action) {
 
 function Editor({ dispatch, state }) {
   return (
-    <div>
-      <SearchApp onSelect={(id) => dispatch({type: "SELECT_EVENT", id})} />
-      <EditorApp eventId={state.eventId} />
+    <div className="app_editor">
+      <SearchApp event={state.event} onSelect={(id) => dispatch({type: "SELECT_EVENT", id})} />
+      <EditorApp eventId={state.eventId} onUpdate={(event) => dispatch({type:"UPDATE_EVENT", event})} />
     </div>
   );
 }
